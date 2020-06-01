@@ -73,7 +73,7 @@ public class RiskCalculator extends GraphicsProgram {
 			remove(riskWarning);
 		}
 		
-		riskWarning = new GLabel("High Risk: Only go out if you absolutly must, wear masks, and practice social distancing",getWidth()/40,getHeight()*0.30);
+		riskWarning = new GLabel("High Risk: Only go out if you absolutely must, wear masks, and practice social distancing",getWidth()/40,getHeight()*0.30);
 		riskWarning.setFont("TimesRoman-27"); //TimesRoman-27
 		riskWarning.setColor(Color.RED);
 		
