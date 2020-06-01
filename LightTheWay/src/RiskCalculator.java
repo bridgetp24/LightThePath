@@ -1,10 +1,18 @@
+import java.awt.image.BufferedImage;
+import java.net.URL;
+import java.nio.Buffer;
 import java.util.Scanner;
 import java.io.Console;
 import java.awt.event.*;
 import acm.program.*;
 import acm.graphics.*;
 import acm.util.*;
+import org.imgscalr.Scalr;
+
+import javax.imageio.ImageIO;
 import java.awt.*;
+
+import static org.imgscalr.Scalr.OP_GRAYSCALE;
 
 public class RiskCalculator extends GraphicsProgram {
 	public static final int APPLICATION_WIDTH = 1250;
@@ -162,9 +170,146 @@ public class RiskCalculator extends GraphicsProgram {
 	public void run () {
 		addMouseListeners(); 
 		drawBackground(); 
-		calculateChance("enter address here"); 
-
-		 	
-		
+		calculateChance("enter address here");
+		getLosAngelesRisk();
+		getNorthDakotaRisk();
 	}
+
+	// image processing
+
+	// get image from url
+	private static final String EPSG = "4326"; // this means lat/lon geographic
+	private static final String PRODUCT_NAME = "VIIRS_SNPP_DayNightBand_ENCC";
+	// Nighttime Imagery (Day/Night Band, Enhanced Near Constant Contrast)
+
+	private static final String TILE_MATRIX_SET = "GoogleMapsCompatible_Level6";
+	private static final String TILE_MATRIX = "6"; // 7 is more precise but it causes werid tearing
+	private static final String ZOOM_LEVEL = "500m"; // highest resolution, 500m per pixel
+
+	private static final String MOST_RECENT_VALID_TIME = "2020-02-01";
+	private static final int GRID_SIZE = 3; //split each image into a 3x3 grid because the images cover quite a large ground area
+
+	public BufferedImage getPhoto(String date, int row, int col) {
+		String baseUrl = "https://gibs.earthdata.nasa.gov/wmts/epsg" + EPSG +
+				"/best/wmts.cgi?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=" + PRODUCT_NAME +
+				"&STYLE=&TILEMATRIXSET=" + ZOOM_LEVEL + "&TILEMATRIX=" + TILE_MATRIX + "&TILEROW=" + row +
+				"&TILECOL=" + col + "&FORMAT=image%2Fpng&TIME=" + date;
+		try {
+			URL url = new URL(baseUrl);
+			BufferedImage image = ImageIO.read(url);
+			return image;
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return null;
+	}
+
+	public BufferedImage cropPhoto(BufferedImage image, int subrow, int subcol) {
+
+		int tileW = image.getWidth() / GRID_SIZE;
+		int tileH = image.getHeight() / GRID_SIZE;
+
+		int x = subrow * tileW;
+		int y = subcol * tileH;
+
+		return Scalr.crop(image, x, y, tileW, tileH);
+	}
+
+	public double getAverageBrightness(BufferedImage image) {
+		int sumBrightness = 0;
+		for (int i = 0; i < image.getWidth(); i++) {
+			for (int j = 0; j < image.getHeight(); j++) {
+				int rgb = image.getRGB(i, j);
+				int r = (rgb >> 16) & 0xFF;
+				int g = (rgb >> 8) & 0xFF;
+				int b = (rgb & 0xFF);
+				int gray = (r + g + b) / 3;
+				sumBrightness += gray;
+			}
+		}
+
+		return sumBrightness / (double) (image.getWidth() * image.getHeight());
+	}
+
+	public RiskAssessment getRisk(double currentBrightness, double averageBrightness) {
+		// todo maybe add y intercept
+		double deltaBrightness = currentBrightness - averageBrightness;
+		double risk = currentBrightness + deltaBrightness;
+		return new RiskAssessment(
+				risk,
+				currentBrightness,
+				deltaBrightness
+			);
+	}
+
+
+	public double getLastYearAverageBrightness(int row, int col, int subrow, int subcol) {
+		double sumBrightness = 0;
+		for (int i = 1; i <= 12; i++) {
+			String month = String.format("%02d", i);
+			String date = "2019-" + month + "-01";
+			System.out.println("Getting brightness from: " + date);
+			BufferedImage imag = getPhoto(date, row, col);
+			imag = cropPhoto(imag, subrow, subcol);
+			sumBrightness += getAverageBrightness(imag);
+		}
+
+		return sumBrightness / 12.0;
+	}
+
+	// unfortunately, have to hard code since the GIBS api doesn't provide an easy way to get a specify location / identify a location
+	public RiskAssessment getLosAngelesRisk() {
+		int LALocationRow = 11;
+		int LALocationCol = 13;
+
+		int LASubsetRow = 1;
+		int LASubsetCol = 2;
+
+		BufferedImage image = getPhoto(MOST_RECENT_VALID_TIME, LALocationRow, LALocationCol);
+		image = cropPhoto(image, LASubsetRow, LASubsetCol);
+
+		double LACurrentBrightness = getAverageBrightness(image);
+		System.out.println("Current Brightness: " + LACurrentBrightness);
+
+		double LAAverageBrightness = getLastYearAverageBrightness(LALocationRow, LALocationCol,
+				LASubsetRow, LASubsetCol);
+
+		print("Average Brightness Last Year: " + LAAverageBrightness);
+
+		RiskAssessment ra = getRisk(LACurrentBrightness, LAAverageBrightness);
+		System.out.println("LA Estimated Risk: " + ra.getRisk());
+		System.out.println("LA Estimated Risk Breakdown: " + ra.getRiskDueToPopulation() + " was caused by the population," +
+				" determined by current brightness. And " + ra.getRiskDueToDeltaPopulation() +
+				" was caused by the change in the local population, determined from the change in brightness from the last year.");
+
+		return ra;
+	}
+
+	public RiskAssessment getNorthDakotaRisk() {
+		int NDLocationRow = 9;
+		int NDLocationCol = 16;
+
+		int NDSubsetRow = 1;
+		int NDSubsetCol = 0;
+
+		BufferedImage image = getPhoto(MOST_RECENT_VALID_TIME, NDLocationRow, NDLocationCol);
+		image = cropPhoto(image, NDSubsetRow, NDSubsetCol);
+
+		double NDCurrentBrightness = getAverageBrightness(image);
+		System.out.println("Current Brightness: " + NDCurrentBrightness);
+
+		double NDAverageBrightness = getLastYearAverageBrightness(NDLocationRow, NDLocationCol,
+				NDSubsetRow, NDSubsetCol);
+
+		print("Average Brightness Last Year: " + NDAverageBrightness);
+
+		RiskAssessment ra = getRisk(NDCurrentBrightness, NDAverageBrightness);
+		System.out.println("North Dekota Estimated Risk: " + ra.getRisk());
+		System.out.println("ND Estimated Risk Breakdown: " + ra.getRiskDueToPopulation() + " was caused by the population," +
+				" determined by current brightness. And " + ra.getRiskDueToDeltaPopulation() +
+				" was caused by the change in the local population, determined from the change in brightness from the last year.");
+
+		return ra;
+	}
+
 }
