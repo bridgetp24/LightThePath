@@ -1,18 +1,13 @@
 import java.awt.image.BufferedImage;
 import java.net.URL;
-import java.nio.Buffer;
-import java.util.Scanner;
-import java.io.Console;
 import java.awt.event.*;
 import acm.program.*;
 import acm.graphics.*;
-import acm.util.*;
 import org.imgscalr.Scalr;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
-
-import static org.imgscalr.Scalr.OP_GRAYSCALE;
+import java.text.DecimalFormat;
 
 public class RiskCalculator extends GraphicsProgram {
 	public static final int APPLICATION_WIDTH = 1250;
@@ -25,89 +20,118 @@ public class RiskCalculator extends GraphicsProgram {
 
 	/** Width and height of application window in pixels */
 	
-	public int risk; 
-	public String address; 
-	public int chance; 
+
 	public int WORD_HEIGHT = getHeight()/2 - 100;//-100
 	public int IMAGE_HEIGHT = getHeight()/2 - 80;//-80
-	GImage calcButton; 
-	
+
+	private GImage calcLAButton;
+	private GImage calcNDButton;
+
+	private GLabel riskNum;
+	private GLabel[] riskExplains;
+	private GLabel riskWarning;
 
 
 	@Override
 	//use for button 
 	public void mousePressed(MouseEvent e) {
 
+		DecimalFormat df = new DecimalFormat("#.000");
+		RiskAssessment ra = null;
+
 		double x = e.getX();
 		double y = e.getY();
 		//&& y < calcButton.getY() && y > (calcButton.getY() - calcButton.getHeight())
-		if (x > calcButton.getX() && x < calcButton.getX() + calcButton.getWidth() ){ 
-			
-			printChance(); 
+		if (x > calcNDButton.getX() && x < calcNDButton.getX() + calcNDButton.getWidth() &&
+				y > calcNDButton.getY() && y < calcNDButton.getY() + calcNDButton.getHeight()) {
+
+			ra = getNorthDakotaRisk();
 		}
 
-	}
-	
+		if (x > calcLAButton.getX() && x < calcLAButton.getX() + calcLAButton.getWidth() &&
+				y > calcLAButton.getY() && y < calcLAButton.getY() + calcLAButton.getHeight()) {
 
-	
-	public void getAddress() {
-	
-		Scanner sc = new Scanner(System.in);
-		address = sc.nextLine(); 
-		println("Your address is "+ address);
-		
-		
+			ra = getLosAngelesRisk();
+
+		}
+
+		if (ra != null) {
+			printResult(ra.getRisk(), "Estimated Risk: " + df.format(ra.getRisk()),
+					"Estimated Risk Breakdown: " + df.format(ra.getRiskDueToPopulation()),
+					"was caused by the population, determined by current",
+					"brightness. And " + df.format(ra.getRiskDueToDeltaPopulation()) + " was caused by the",
+					"change in the local population, determined",
+					"from the change in brightness from the last year.");
+		}
+
+
 	}
-	
+
 	public void drawHighWarn() {
+
+		if (riskWarning != null) {
+			remove(riskWarning);
+		}
 		
+		riskWarning = new GLabel("High Risk: Only go out if you absolutly must, wear masks, and practice social distancing",getWidth()/40,getHeight()*0.30);
+		riskWarning.setFont("TimesRoman-27"); //TimesRoman-27
+		riskWarning.setColor(Color.RED);
 		
-		GLabel HWarn = new GLabel("High Risk: Only go out if you absolutly must, wear masks, and practice social distancing",getWidth()/40,getHeight()*0.30);
-		HWarn.setFont("TimesRoman-27"); //TimesRoman-27
-		HWarn.setColor(Color.RED);
-		
-		add(HWarn); 
+		add(riskWarning);
+
+
 		
 		
 	}
 	public void drawLowWarn() {
 
-		GLabel LWarn = new GLabel("Lower Risk: If you go out, wear a mask and practice social distancing",getWidth()/24, getHeight()*0.30);
+		if (riskWarning != null) {
+			remove(riskWarning);
+		}
+
+		riskWarning = new GLabel("Lower Risk: If you go out, wear a mask and practice social distancing",getWidth()/24, getHeight()*0.30);
 		//LWarn.setLocation((getWidth() - LWarn.getWidth())/2,getHeight()*0.25 );
-		LWarn.setFont("TimesRoman-33"); 
-		LWarn.setColor(Color.DARK_GRAY);
-		add(LWarn);
+		riskWarning.setFont("TimesRoman-33");
+		riskWarning.setColor(Color.DARK_GRAY);
+		add(riskWarning);
 	}
-	
-	public void calculateChance(String address) {
-		
-		int lightfactor = 50; 
-		int changeInLightFactor = 50; 
-		int externalFactor = 50; 
-		
-		/*
-		 * Right now, this is a random number but this method would be filled with a connection
-		 * to an algorithm that would calculate relative risk using light movement data, data from airlines, 
-		 * and other factors. This method would input the user's address as a parameter and connect to 
-		 * a map API like google maps. 
-		 * double index = lightFactor + changeInLightFactor + externalFactor;
-		 */
-		chance = (int)((Math.random() * (101)));
-		
-		 
-	}
-	
-	
-	public void printChance() {
+
+
+	public void printResult(double risk, String riskStr, String... explanationLines) {
 		//prints the chance on a 1 - 100 scale as a Glabel
-		GLabel riskNum = new GLabel("" + chance ,getWidth()*0.6 + 200,getHeight()/2 - 100); 
+
+		if (riskNum != null) {
+			remove(riskNum);
+		}
+
+		if (riskExplains != null) {
+			for (int i = 0; i < riskExplains.length; i++) {
+				remove(riskExplains[i]);
+			}
+		}
+
+		riskNum = new GLabel(riskStr,800,getHeight()/2.0 - 100);
 		riskNum.setColor(Color.WHITE); 
-		riskNum.setFont("TimesRoman-50"); 
-		add(riskNum); 
+		riskNum.setFont("TimesRoman-30");
+		add(riskNum);
+
+		riskExplains = new GLabel[explanationLines.length];
+
+		for (int i = 0; i < explanationLines.length; i++) {
+
+			GLabel riskExplain = new GLabel(explanationLines[i],800,getHeight()/2.0 - 45 + (i * 40));
+			riskExplain.setColor(Color.WHITE);
+			riskExplain.setFont("TimesRoman-16");
+			add(riskExplain);
+
+			riskExplains[i] = riskExplain;
+
+		}
+
 		
-		if(chance > 60) {
+		if(risk > 80) {
 			drawHighWarn();
-		} else {
+		} else if (risk > 0) {
 			drawLowWarn(); 
 		}
 	
@@ -122,55 +146,47 @@ public class RiskCalculator extends GraphicsProgram {
 		GImage background = new GImage("NasaTemplate.jpg",0,0);
 		background.setSize(1250, 1000);
 		add(background);
-		GLabel title = new GLabel("COVID-19 Risk Calculator", getWidth() * 0.5 - 300, getHeight() * 1/6);
+		GLabel title = new GLabel("COVID-19 Risk Calculator", getWidth() * 0.5 - 300, getHeight() * 1.0/6.0);
 		title.setFont("Verdana-50"); //TimesRoman-50
 		title.setColor(Color.WHITE);
 		add(title);
 		drawRiskScale();
-		GLabel label = new GLabel("Address: ", getWidth()/10, getHeight()/2 - 100);
-		label.setFont("TimesRoman-50");
-		label.setColor(Color.WHITE);
-		add(label);
-		drawInputBox(); 
+		GLabel labelLA = new GLabel("Calculate Risk for Los Angeles: ", 0, getHeight() - 600);
+		labelLA.setFont("TimesRoman-50");
+		labelLA.setColor(Color.WHITE);
+		add(labelLA);
+
+		GLabel labelND = new GLabel("Calculate Risk for North Dakota: ", 0, getHeight() - 300);
+		labelND.setFont("TimesRoman-50");
+		labelND.setColor(Color.WHITE);
+		add(labelND);
+
 		drawCalcButton();
 		
 		
 		
 	}
-	
-	public void drawInputBox() {
-		
-		/**
-		 * this is a placeholder for an actual user input mechanism 
-		 */
-		
-		GImage box = new GImage("inputbox.png",getWidth()/10,getHeight()/2 - 80);
-		add(box);
-	}
+
 	public void drawRiskScale() {
-		
-		GLabel risk = new GLabel("Risk:",getWidth()*0.6,getHeight()/2 - 100); 
-		risk.setColor(Color.WHITE); 
-		risk.setFont("TimesRoman-50"); 
-		add(risk); 
-		
-		GImage scale = new GImage("riskScale.png", getWidth() * 0.6,getHeight()/2 - 80);
+
+		GImage scale = new GImage("riskScale.png", getWidth() * 0.7,getHeight()/2.0 + 175);
 		add(scale);
 
 	}
 	
 	public void drawCalcButton() {
 		
-		calcButton = new GImage("calculate button.jpg", getWidth()/10, getHeight()* 0.75); 
-		add(calcButton); 
-		
+		calcLAButton = new GImage("calculate button.jpg", getWidth()/10, getHeight() - 580);
+		calcNDButton = new GImage("calculate button.jpg", getWidth()/10, getHeight() - 280);
+		add(calcLAButton);
+		add(calcNDButton);
+
 	}
 	
 	
 	public void run () {
 		addMouseListeners(); 
 		drawBackground(); 
-		calculateChance("enter address here");
 		getLosAngelesRisk();
 		getNorthDakotaRisk();
 	}
@@ -248,7 +264,6 @@ public class RiskCalculator extends GraphicsProgram {
 		for (int i = 1; i <= 12; i++) {
 			String month = String.format("%02d", i);
 			String date = "2019-" + month + "-01";
-			System.out.println("Getting brightness from: " + date);
 			BufferedImage imag = getPhoto(date, row, col);
 			imag = cropPhoto(imag, subrow, subcol);
 			sumBrightness += getAverageBrightness(imag);
@@ -269,18 +284,11 @@ public class RiskCalculator extends GraphicsProgram {
 		image = cropPhoto(image, LASubsetRow, LASubsetCol);
 
 		double LACurrentBrightness = getAverageBrightness(image);
-		System.out.println("Current Brightness: " + LACurrentBrightness);
 
 		double LAAverageBrightness = getLastYearAverageBrightness(LALocationRow, LALocationCol,
 				LASubsetRow, LASubsetCol);
 
-		print("Average Brightness Last Year: " + LAAverageBrightness);
-
 		RiskAssessment ra = getRisk(LACurrentBrightness, LAAverageBrightness);
-		System.out.println("LA Estimated Risk: " + ra.getRisk());
-		System.out.println("LA Estimated Risk Breakdown: " + ra.getRiskDueToPopulation() + " was caused by the population," +
-				" determined by current brightness. And " + ra.getRiskDueToDeltaPopulation() +
-				" was caused by the change in the local population, determined from the change in brightness from the last year.");
 
 		return ra;
 	}
@@ -296,18 +304,11 @@ public class RiskCalculator extends GraphicsProgram {
 		image = cropPhoto(image, NDSubsetRow, NDSubsetCol);
 
 		double NDCurrentBrightness = getAverageBrightness(image);
-		System.out.println("Current Brightness: " + NDCurrentBrightness);
 
 		double NDAverageBrightness = getLastYearAverageBrightness(NDLocationRow, NDLocationCol,
 				NDSubsetRow, NDSubsetCol);
 
-		print("Average Brightness Last Year: " + NDAverageBrightness);
-
 		RiskAssessment ra = getRisk(NDCurrentBrightness, NDAverageBrightness);
-		System.out.println("North Dekota Estimated Risk: " + ra.getRisk());
-		System.out.println("ND Estimated Risk Breakdown: " + ra.getRiskDueToPopulation() + " was caused by the population," +
-				" determined by current brightness. And " + ra.getRiskDueToDeltaPopulation() +
-				" was caused by the change in the local population, determined from the change in brightness from the last year.");
 
 		return ra;
 	}
